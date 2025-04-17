@@ -1,0 +1,422 @@
+clc
+clear
+close all
+% Read and resize the original image and the watermark image
+original_image = imread('Lenna.jpg');
+original_image = imresize(original, [1024 1024]);
+% First watermark (binary image)
+watermark1 = imread('apple.tif');
+watermark1 = im2bw(watermark1);
+watermark1 = imresize(watermark1, [64 64]);
+% Second watermark (grayscale image)
+watermark2 = imread('cameraman.tif');
+watermark2 = imresize(watermark2, [128 128]);
+%% RGB components
+% Separate the RGB channels of the original image
+r = original_image(:, :, 1);
+g = original_image(:, :, 2);
+b = original_image(:, :, 3);
+%% 2-Level DWT on blue channel
+% Apply two-level Haar wavelet decomposition to the blue channel
+[LL1, LH1, HL1, HH1] = dwt2(b, 'haar');
+[LL2, LH2, HL2, HH2] = dwt2(LL1, 'haar');
+%% Divide LL2 into 8×8 blocks
+[m, n] = size(LL2);
+Blocks = cell(m/8, n/8);
+counti = 0;
+for i = 1:8:m-7
+    counti = counti + 1;
+    countj = 0;
+    for j = 1:8:n-7
+        countj = countj + 1;
+        Blocks{counti, countj} = LL2(i:i+7, j:j+7);
+    end
+end
+%% DCT on each block
+for i=1:32
+    for j=1:32
+        A{i,j}=dct2(Blocks{i,j});
+    end
+end
+%% Embedding the first watermark
+for i=1:32
+    for j=1:32
+        original_key=10101;
+        original_keyy=[1 -1 1 -1 1];
+        original_key1=original_keyy*0.5;
+        zigzag_out1=zigzag(A{i,j}); % Convert to zigzag vector
+        if w_img1(i,j)==1 % Embedding watermark Bit 1
+            zigzag_out1(10:14)=original_key1;
+        elseif w_img1(i,j)==0 % Embedding watermark Bit 0
+            zigzag_out1(10:14)=-original_key1;
+        end
+        z_outinv=izigzag(zigzag_out1,8,8); % Inverse zigzag
+        dct_inv{i,j}=idct2(z_outinv);% Inverse DCT
+    end
+end
+%% Reconstruct DWT subband 
+LL2 = cell2mat(dct_inv);
+%% Inverse DWT to reconstruct watermarked blue channel with(first watermark)
+LL1 = idwt2(LL2, LH2, HL2, HH2,'haar');
+watermarked1 = idwt2(LL1, LH1, HL1, HH1,'haar');
+%% Reconstruct RGB channels to get watermarked image with (first watermark)
+watermarked_image = cat(3, r, g, watermarked1);%title('watermarked image with first watermark image')
+%% Apply DWT on watermarked image with first watermark 
+[LLw1, LHw1, HLw1, HHw1] = dwt2(watermarked1,'haar');
+%% Divide LLw2 into 128x128 blocks
+[m2,n2] = size(LLw1);
+Blocks2 = cell(m2/128,n2/128);
+counti2 = 0;
+for i2 = 1:128:m2-127
+    counti2 = counti2 + 1;
+    countj2 = 0;
+    for j2 = 1:128:n2-127
+        countj2 = countj2 + 1;
+        Blocks2{counti2,countj2} = LLw1(i2:i2+127,j2:j2+127);
+    end
+end
+%% DCT on second watermark
+A3=dct2(watermark2);
+%% Emdedding process of second watermark
+for i2=1:4
+    for j2=1:4
+        A4(i2,j2)=var(var(Blocks2{i2,j2})); %Compute variance to decide where to embed (second watermark)
+    end
+end
+A5=mean(mean(A4)); %Compute mean  
+for i2=1:4
+    for j2=1:4
+        if A4(i2,j2)<=A5/2 
+            A2{i2,j2}=dct2(Blocks2{i2,j2}); % DCT 
+            zigzag_output2=zigzag(A2{i2,j2}); % Zigzag 
+            zigzag_output2(257:1280)=zigzag_output1(1:1024)/10000; % Embed Second Watermark
+            q=izigzag(zigzag_output2,128,128); % Inverse Zigzag
+            q1{i2,j2}=idct2(q); %Inverse DCT 
+        end
+        if A4(i2,j2)>=A5/2
+            q1{i2,j2}=Blocks2{i2,j2}; 
+        end
+    end
+end
+%% Reconstruct blocks to see watermarked image With first and second watermark
+LLw2 = cell2mat(q1);
+%% Inverse DWT to get final watermarked image
+final_watermarked1 = idwt2(LLw2, LHw1, HLw1, HHw1,'haar');
+final_watermarked_image= medfilt2(final_watermarked1);
+watermarked_image_final = cat(3, r, g, final_watermarked);%title('watermarked image with first and second watermark images')
+%% Extract first watermark
+% DWT on final_watermarked image
+[LL1e,LH1e, HL1e, HH1e] = dwt2(final_watermarked_image,'haar');
+[LL2e, LH2e,HL2e, HH2e] = dwt2(LL1e,'haar');
+%% Divide LL2e into 8x8 Blocks
+[m1,n1] = size(LL2e);
+Blocks1 = cell(m1/8,n1/8);
+counti1 = 0;
+for i1 = 1:8:m1-7
+    counti1 = counti1 + 1;
+    countj1 = 0;
+    for j1 = 1:8:n1-7
+        countj1 = countj1 + 1;
+        Blocks1{counti1,countj1} = LL2e(i1:i1+7,j1:j1+7);
+    end
+end
+%% Extracting process of watermark1 Bits
+for i1=1:32
+    for j1=1:32
+        A1{i1,j1}=dct2(Blocks1{i1,j1});
+        A1A=zigzag(A1{i1,j1});
+        code=A1A(10:14);
+        CC=sum(code.*original_keyy);
+        if CC>0
+           extracted_ww1(i1,j1)=1;
+        elseif CC<0
+           extracted_ww1(i1,j1)=0;
+        end
+    end
+end
+%% Extracted watermark wmage 1
+figure(12);imshow(extracted_ww1,[]);%title('extracted watermark image1 without attack')
+%% Apply DWT 
+[LLw1e, LHw1e,HLw1e,HHw1e] = dwt2(final_watermarked, 'haar');
+%% Divide into blocks 
+[m3,n3] = size(LLw1e);
+Blocks3 = cell(m3/128,n3/128);
+counti3 = 0;
+for i3 = 1:128:m3-127
+    counti3 = counti3 + 1;
+    countj3 = 0;
+    for j3 = 1:128:n3-127
+        countj3 = countj3 + 1;
+        Blocks3{counti3,countj3} = LLw1e(i3:i3+127,j3:j3+127);
+    end
+end
+%% Continue Extracting process to extracted watermark image 2(calculate variance and mean)
+for i3=1:4
+    for j3=1:4
+        A6(i3,j3)=var(var(Blocks3{i3,j3})); % Compute variance
+    end
+end
+A7=mean(mean(A6)); %Compute mean  
+Qsum_zerosmtx=zeros(128,128); % Zeros matrix for adding with inverse DCT
+cnt=0;
+for i3=1:4
+    for j3=1:4
+        if A6(i3,j3)<=A7/2
+            A8{i3,j3}=dct2(Blocks3{i3,j3}); % DCT 
+            zigzag_output3=zigzag(A8{i3,j3}); % Zigzag 
+            zeros_mtx=zeros(1,16384);
+            zeros_mtx(1:1024)=zigzag_output3(257:1280)*10000; % Extract watermark 2
+            q2=izigzag(zeros_mtx,128,128); % Inverse zigzag
+            q3=idct2(q2); %Inverse DCT 
+            Qsum_zerosmtx=Qsum_zerosmtx+q3;
+            cnt=cnt+1;
+        end
+    end
+end
+extracted_ww2=Qsum_zerosmtx/cnt; 
+figure(13);imshow(extracted_ww2,[]);%title('extract watermark image 2 without attack')
+extracted_ww2_1=mapminmax(extracted_ww2,0,255);
+figure(14);imshow(Qsum1,[]);%title('extract watermark image 2 with mapminmax without attack')
+watermark2=dct2(w_img2);
+watermark22=zigzag(watermark2);
+watermark22(1025:end)=0;
+watermark222=izigzag(watermark22,128,128);
+watermark_2=idct2(watermark222);
+watermark_22=mapminmax(watermark_2,0,255);
+%figure(15);imshow(watermark_22,[]);
+%% Calculate PSNR and MSE
+origImg1=im2uint8(orginal_image);
+distImg1=im2uint8(watermarked_image_final);
+[M1 N1] = size(origImg1);
+error1 = origImg1 - distImg1;
+MSE1 = sum(sum(error1 .* error1)) / (M1 * N1);
+PSNR1 = 10*log(255*255/MSE1) / log(10);
+PSNR11=num2str(PSNR1);
+MSE11=num2str(MSE1);
+disp(['The PSNR value is:',PSNR11])
+disp(['The MSE value is:',MSE11])
+%% Calculate SSIM
+origImg1=im2uint8(orginal_image);
+distImg1=im2uint8(watermarked_image_final);
+SSIM11=SSIM(origImg1,distImg1);
+disp(['The SSIM value is:',SSIM11])
+%% calculate ncc First Watermark
+watermark_logo1=watermark1;
+extracted_watermark1=extracted_ww1;
+NC1=nc(watermark_logo1,extracted_watermark1);
+NC1=num2str(NC1);
+disp(['The NC1 value for first original watermark and extracted first watermark is:',NC1])
+%% calculate ncc Second Watermark
+watermark_logo1=watermark_22;
+extracted_watermark1=extracted_ww2;
+NC2=nc1(watermark_logo1,extracted_watermark1);
+NC2=num2str(NC2);
+disp(['The NC2 Value for second original watermark and extracted second watermark is:',NC2])
+%% calculate BER for First Watermark
+w1_bin=watermark1;
+e1_bin=extracted_ww1;
+[number,ratio] = biterr(w1_bin,e1_bin);
+RATIO=num2str(ratio);
+disp(['The BER value is :',RATIO])
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function output = zigzag(in)
+% initializing the variables
+%----------------------------------
+h = 1;
+v = 1;
+vmin = 1;
+hmin = 1;
+vmax = size(in, 1);
+hmax = size(in, 2);
+i = 1;
+output = zeros(1, vmax * hmax);
+%----------------------------------
+while ((v <= vmax) & (h <= hmax))
+      if (mod(h + v, 2) == 0)                 % going up
+          if (v == vmin)       
+              output(i) = in(v, h);        % if we got to the first line
+              if (h == hmax)
+          v = v + 1;
+        else
+                h = h + 1;
+              end;
+              i = i + 1;
+          elseif ((h == hmax) & (v < vmax))   % if we got to the last column
+              output(i) = in(v, h);
+              v = v + 1;
+              i = i + 1;
+          elseif ((v > vmin) & (h < hmax))    % all other cases
+              output(i) = in(v, h);
+              v = v - 1;
+              h = h + 1;
+              i = i + 1;
+       end;
+      else                                    % going down
+         if ((v == vmax) & (h <= hmax))       % if we got to the last line
+              output(i) = in(v, h);
+              h = h + 1;
+              i = i + 1;
+         elseif (h == hmin)                   % if we got to the first column
+              output(i) = in(v, h);
+              if (v == vmax)
+          h = h + 1;
+        else
+                v = v + 1;
+              end;
+              i = i + 1;
+         elseif ((v < vmax) & (h > hmin))     % all other cases
+              output(i) = in(v, h);
+              v = v + 1;
+              h = h - 1;
+              i = i + 1;
+          end;
+      end;
+      if ((v == vmax) & (h == hmax))          % bottom right element
+          output(i) = in(v, h);
+          break
+      end;
+end;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function output = zigzag(in)
+% initializing the variables
+%----------------------------------
+h = 1;
+v = 1;
+vmin = 1;
+hmin = 1;
+vmax = size(in, 1);
+hmax = size(in, 2);
+i = 1;
+output = zeros(1, vmax * hmax);
+%----------------------------------
+while ((v <= vmax) & (h <= hmax))
+      if (mod(h + v, 2) == 0)                 % going up
+          if (v == vmin)       
+              output(i) = in(v, h);        % if we got to the first line
+              if (h == hmax)
+          v = v + 1;
+        else
+                h = h + 1;
+              end;
+              i = i + 1;
+          elseif ((h == hmax) & (v < vmax))   % if we got to the last column
+              output(i) = in(v, h);
+              v = v + 1;
+              i = i + 1;
+          elseif ((v > vmin) & (h < hmax))    % all other cases
+              output(i) = in(v, h);
+              v = v - 1;
+              h = h + 1;
+              i = i + 1;
+       end;
+      else                                    % going down
+         if ((v == vmax) & (h <= hmax))       % if we got to the last line
+              output(i) = in(v, h);
+              h = h + 1;
+              i = i + 1;
+         elseif (h == hmin)                   % if we got to the first column
+              output(i) = in(v, h);
+              if (v == vmax)
+          h = h + 1;
+        else
+                v = v + 1;
+              end;
+              i = i + 1;
+         elseif ((v < vmax) & (h > hmin))     % all other cases
+              output(i) = in(v, h);
+              v = v + 1;
+              h = h - 1;
+              i = i + 1;
+          end;
+      end;
+      if ((v == vmax) & (h == hmax))          % bottom right element
+          output(i) = in(v, h);
+          break
+      end;
+end;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function PSNR = psnr(distImg, origImg)
+
+            origImg = double(origImg);
+            distImg = double(distImg);
+
+            [M N] = size(origImg);
+            error = origImg - distImg;
+            MSE = sum(sum(error .* error)) / (M * N);
+
+            if(MSE > 0)
+            PSNR = 10*log(255*255/MSE) / log(10);
+            else
+            PSNR = 99;
+            end 
+
+        end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function ssim_val = ssim_color(I, I_star)
+    % Convert images to double for accuracy
+    I = double(I);
+    I_star = double(I_star);
+
+    % Constants to stabilize the division
+    C1 = (0.01 * 255)^2;
+    C2 = (0.03 * 255)^2;
+
+    % Initialize SSIM for each channel
+    ssim_channels = zeros(1, 3);
+
+    for c = 1:3  % For R, G, B channels
+        I_c = I(:,:,c);
+        I_star_c = I_star(:,:,c);
+
+        mu_I = mean(I_c(:));
+        mu_I_star = mean(I_star_c(:));
+
+        sigma_I_sq = var(I_c(:), 1);
+        sigma_I_star_sq = var(I_star_c(:), 1);
+
+        sigma_I_I_star = mean((I_c(:) - mu_I) .* (I_star_c(:) - mu_I_star));
+
+        numerator = (2 * mu_I * mu_I_star + C1) * (2 * sigma_I_I_star + C2);
+        denominator = (mu_I^2 + mu_I_star^2 + C1) * (sigma_I_sq + sigma_I_star_sq + C2);
+
+        ssim_channels(c) = numerator / denominator;
+    end
+
+    % Average SSIM over all channels
+    ssim_val = mean(ssim_channels);
+end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Normalized Correlation (NC)
+function [NC] = nc(watermark_logo,extracted_watermark)
+w = double(watermark_logo);
+w_hat = double(extracted_watermark);
+N = length(w);
+A = 0; B = 0; C = 0;
+for i = 1:N
+    for j = 1:N
+        A = A + w(i,j)*w_hat(i,j);
+        B = B + w(i,j)*w(i,j);
+        C = C + w_hat(i,j)*w_hat(i,j);
+    end
+end
+%B = sqrt(B); C = sqrt(C);
+%NC = A/(B*C);
+NC=A/B;
+end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Normalized Correlation (NC1)
+function [NC] = nc1(watermark_logo,extracted_watermark)
+w = double(watermark_logo);
+w_hat = double(extracted_watermark);
+N = length(w);
+A = 0; B = 0; C = 0;
+for i = 1:N
+    for j = 1:N
+        A = A +(w(i,j)-mean(mean(w)))*((w_hat(i,j)-mean(mean(w_hat))));
+        B = B + (w(i,j)-mean(mean(w))).^2;
+        C = C + (w_hat(i,j)-mean(mean(w_hat))).^2;
+    end
+end
+B = sqrt(B); C = sqrt(C);
+NC = abs(A)/(B*C);
+end
