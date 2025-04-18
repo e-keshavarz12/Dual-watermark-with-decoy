@@ -134,8 +134,8 @@ for i1=1:32
         end
     end
 end
-%% Extracted watermark wmage 1
 figure(12);imshow(extracted_ww1,[]);%title('extracted watermark image1 without attack')
+%% Extracted second watermark 
 %% Apply DWT 
 [LLw1e, LHw1e,HLw1e,HHw1e] = dwt2(final_watermarked, 'haar');
 %% Divide into blocks 
@@ -177,7 +177,7 @@ extracted_ww2=Qsum_zerosmtx/cnt;
 figure(13);imshow(extracted_ww2,[]);%title('extract watermark image 2 without attack')
 extracted_ww2_1=mapminmax(extracted_ww2,0,255);
 figure(14);imshow(Qsum1,[]);%title('extract watermark image 2 with mapminmax without attack')
-watermark2=dct2(w_img2);
+watermark2=dct2(watermark2);
 watermark22=zigzag(watermark2);
 watermark22(1025:end)=0;
 watermark222=izigzag(watermark22,128,128);
@@ -200,13 +200,13 @@ origImg1=im2uint8(orginal_image);
 distImg1=im2uint8(watermarked_image_final);
 SSIM11=SSIM(origImg1,distImg1);
 disp(['The SSIM value is:',SSIM11])
-%% calculate ncc First Watermark
+%% calculate nc First Watermark
 watermark_logo1=watermark1;
 extracted_watermark1=extracted_ww1;
 NC1=nc(watermark_logo1,extracted_watermark1);
 NC1=num2str(NC1);
 disp(['The NC1 value for first original watermark and extracted first watermark is:',NC1])
-%% calculate ncc Second Watermark
+%% calculate nc Second Watermark
 watermark_logo1=watermark_22;
 extracted_watermark1=extracted_ww2;
 NC2=nc1(watermark_logo1,extracted_watermark1);
