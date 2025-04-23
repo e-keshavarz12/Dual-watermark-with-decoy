@@ -102,7 +102,11 @@ end
 LLw2 = cell2mat(q1);
 %% Inverse DWT to get final watermarked image
 final_watermarked1 = idwt2(LLw2, LHw1, HLw1, HHw1,'haar');
-final_watermarked_image= medfilt2(final_watermarked1);
+guidance = rgb2gray(orginal_image);  % guidance image for edge-aware smoothing
+radius = 12;
+epsilon = 0.01^6
+bb1_filtered = imguidedfilter(xbb1);
+final_watermarked_image=cat(3,xr,xg,final_watermarked1);
 watermarked_image_final = cat(3, r, g, final_watermarked);%title('watermarked image with first and second watermark images')
 %% Extract first watermark
 % DWT on final_watermarked image
